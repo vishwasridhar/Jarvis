@@ -17,7 +17,6 @@ export default function Jarvis() {
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [apiKey] = useState(GROQ_API_KEY);
   const chatRef = useRef(null);
   const history = useRef([]);
   const mediaRef = useRef(null);
@@ -50,7 +49,7 @@ export default function Jarvis() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${GROQ_API_KEY}`
         },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
@@ -67,37 +66,46 @@ export default function Jarvis() {
       history.current.push({ role: "assistant", content: reply });
       setMessages(prev => [...prev, { role: "jarvis", text: reply }]);
       speak(reply);
-    } catch {
+    } catch  {
       setMessages(prev => [...prev, { role: "jarvis", text: "Connectivity issue detected, sir. Please check your API key and try again." }]);
     }
     setLoading(false);
   };
 
-  // ── Voice Recording using MediaRecorder → Groq Whisper ──
-  const startListening = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      chunksRef.current = [];
-      const mr = new MediaRecorder(stream);
-      mediaRef.current = mr;
-      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        await transcribeAudio(blob);
-      };
-      mr.start();
-      setListening(true);
-    } catch {
-      alert("Microphone access denied. Please allow mic permission and try again.");
-    }
-  };
+  // ── Click once to START, click again to STOP ──
+  const toggleMic = async () => {
+    if (listening) {
+      // STOP recording
+      if (mediaRef.current && mediaRef.current.state !== "inactive") {
+        mediaRef.current.stop();
+      }
+      setListening(false);
+      setTranscript("Processing your voice...");
+    } else {
+      // START recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunksRef.current = [];
+        const mr = new MediaRecorder(stream);
+        mediaRef.current = mr;
 
-  const stopListening = () => {
-    if (mediaRef.current && mediaRef.current.state !== "inactive") {
-      mediaRef.current.stop();
+        mr.ondataavailable = e => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+
+        mr.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+          await transcribeAudio(blob);
+        };
+
+        mr.start();
+        setListening(true);
+        setTranscript("");
+      } catch  {
+        alert("Microphone access denied. Please allow mic permission and try again.");
+      }
     }
-    setListening(false);
   };
 
   const transcribeAudio = async (blob) => {
@@ -110,22 +118,20 @@ export default function Jarvis() {
 
       const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${apiKey}` },
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}` },
         body: formData
       });
       const data = await res.json();
       const text = data.text?.trim();
       if (text) {
         setTranscript("");
-        setInput(text);
-        // Auto send after voice
-        setTimeout(() => sendMessage(text), 300);
+        await sendMessage(text);
       } else {
         setTranscript("Could not understand. Try again.");
         setTimeout(() => setTranscript(""), 2000);
       }
     } catch {
-      setTranscript("Transcription failed.");
+      setTranscript("Transcription failed. Try again.");
       setTimeout(() => setTranscript(""), 2000);
     }
   };
@@ -156,7 +162,11 @@ export default function Jarvis() {
         </svg>
         <div style={{
           width: 65, height: 65, borderRadius: "50%",
-          background: listening ? `radial-gradient(circle, ${C.warn} 0%, #aa3300 60%, #1a0800 100%)` : loading ? "radial-gradient(circle, #ffaa00 0%, #664400 60%, #1a1000 100%)" : `radial-gradient(circle, ${C.core} 0%, #005577 60%, #001a2e 100%)`,
+          background: listening
+            ? `radial-gradient(circle, ${C.warn} 0%, #aa3300 60%, #1a0800 100%)`
+            : loading
+            ? "radial-gradient(circle, #ffaa00 0%, #664400 60%, #1a1000 100%)"
+            : `radial-gradient(circle, ${C.core} 0%, #005577 60%, #001a2e 100%)`,
           boxShadow: listening ? `0 0 30px ${C.warn}` : `0 0 30px ${C.core}`,
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: "0.45rem", fontWeight: 700, letterSpacing: 1, color: "#fff", transition: "all 0.3s"
@@ -167,7 +177,14 @@ export default function Jarvis() {
 
       {/* Transcript hint */}
       {transcript && (
-        <div style={{ fontSize: "0.7rem", color: C.warn, letterSpacing: 1, marginBottom: 4 }}>{transcript}</div>
+        <div style={{ fontSize: "0.7rem", color: C.warn, letterSpacing: 1, marginBottom: 4, padding: "0 12px", textAlign: "center" }}>{transcript}</div>
+      )}
+
+      {/* Mic status hint */}
+      {listening && (
+        <div style={{ fontSize: "0.68rem", color: C.warn, letterSpacing: 1, marginBottom: 4, animation: "pulse 1s infinite" }}>
+          🔴 Recording... Click 🎤 again to stop & send
+        </div>
       )}
 
       {/* Chat */}
@@ -195,52 +212,54 @@ export default function Jarvis() {
 
       {/* Input Row */}
       <div style={{ width: "100%", maxWidth: 680, padding: "12px", display: "flex", gap: 8, alignItems: "flex-end", marginTop: "auto" }}>
-        {/* MIC BUTTON */}
+
+        {/* MIC BUTTON — Click once to start, click again to stop */}
         <button
-          onMouseDown={startListening}
-          onMouseUp={stopListening}
-          onTouchStart={e => { e.preventDefault(); startListening(); }}
-          onTouchEnd={e => { e.preventDefault(); stopListening(); }}
+          onClick={toggleMic}
+          disabled={loading}
           style={{
-            background: listening ? "rgba(255,100,0,0.2)" : "transparent",
-            border: `1px solid ${listening ? C.warn : C.dim}`,
+            background: listening ? "rgba(255,100,0,0.25)" : "transparent",
+            border: `2px solid ${listening ? C.warn : C.dim}`,
             color: listening ? C.warn : C.dim,
-            borderRadius: 4, padding: "10px 13px", cursor: "pointer",
+            borderRadius: 4, padding: "10px 13px", cursor: loading ? "not-allowed" : "pointer",
             fontSize: "1rem", transition: "all 0.2s",
-            boxShadow: listening ? `0 0 14px rgba(255,100,0,0.5)` : "none"
+            boxShadow: listening ? `0 0 16px rgba(255,100,0,0.6)` : "none",
+            opacity: loading ? 0.4 : 1
           }}
-          title="Hold to speak"
+          title={listening ? "Click to STOP recording" : "Click to START recording"}
         >🎤</button>
 
         <textarea
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-          placeholder={listening ? "🔴 Recording... release mic to send" : "Type or hold 🎤 to speak..."}
+          placeholder={listening ? "🔴 Recording... click 🎤 to stop" : "Type your message or click 🎤 to speak..."}
           rows={1}
+          disabled={listening || loading}
           style={{
             flex: 1, background: "rgba(0,30,60,0.6)",
             border: `1px solid ${C.border}`, borderRadius: 4,
             color: C.text, fontFamily: "'Courier New', monospace",
-            fontSize: "0.78rem", padding: "10px 12px", resize: "none", outline: "none", minHeight: 42
+            fontSize: "0.78rem", padding: "10px 12px", resize: "none", outline: "none", minHeight: 42,
+            opacity: listening ? 0.5 : 1
           }}
         />
 
         <button
           onClick={() => sendMessage(input)}
-          disabled={loading || !input.trim()}
+          disabled={loading || listening || !input.trim()}
           style={{
             background: "transparent", border: `1px solid ${C.core}`, color: C.core,
             fontFamily: "monospace", fontWeight: 700, fontSize: "0.62rem", letterSpacing: 2,
-            padding: "10px 14px", borderRadius: 4, cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading || !input.trim() ? 0.35 : 1, transition: "all 0.2s"
+            padding: "10px 14px", borderRadius: 4, cursor: "pointer",
+            opacity: loading || listening || !input.trim() ? 0.35 : 1, transition: "all 0.2s"
           }}
         >SEND</button>
       </div>
 
-      {/* Mic hint */}
-      <div style={{ fontSize: "0.6rem", color: C.dim, marginBottom: 6, letterSpacing: 1 }}>
-        📱 MOBILE: HOLD 🎤 to record · RELEASE to auto-send
+      {/* Mic instructions */}
+      <div style={{ fontSize: "0.6rem", color: C.dim, marginBottom: 6, letterSpacing: 1, textAlign: "center" }}>
+        🎤 Click ONCE to record · Click AGAIN to stop & send
       </div>
 
       {/* Footer */}
@@ -256,6 +275,7 @@ export default function Jarvis() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes spinR { to { transform: rotate(-360deg); } }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
       `}</style>
     </div>
   );
