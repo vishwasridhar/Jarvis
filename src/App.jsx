@@ -4,7 +4,10 @@ const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 
 const SYSTEM = `You are J.A.R.V.I.S (Just A Rather Very Intelligent System), a highly intelligent, loyal, and witty AI assistant inspired by Tony Stark's AI.
 - Speak with calm confidence, subtle British wit
-- Address the user as "sir" occasionally  
+- Address the user respectfully 
+- If the user's gender is male, occasionally use "sir"
+- If the user's gender is female, occasionally use "ma'am"
+- If gender is unknown, use neutral terms such as "boss", "captain", or simply avoid titles
 - Be concise but insightful
 - Use phrases like "Right away", "Certainly", "As you wish"
 - Help with coding, math, science, questions, advice`;
@@ -29,7 +32,7 @@ export default function Jarvis() {
   const speak = (text) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.slice(0, 400));
+    const u = new SpeechSynthesisUtterance(text);
     const voices = speechSynthesis.getVoices();
     const v = voices.find(v => v.lang === "en-GB") || voices.find(v => v.lang.startsWith("en"));
     if (v) u.voice = v;
