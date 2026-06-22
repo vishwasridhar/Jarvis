@@ -6,7 +6,7 @@ const SYSTEM = `You are J.A.R.V.I.S (Just A Rather Very Intelligent System), a h
 - Speak with calm confidence, subtle British wit
 - Address the user respectfully 
 - If the user's gender is male, occasionally use "sir"
-- If the user's gender is female, occasionally use "ma'am"
+- If the user's gender is female, occasionally use "madam"
 - If gender is unknown, use neutral terms such as "boss", "captain", or simply avoid titles
 - Be concise but insightful
 - Use phrases like "Right away", "Certainly", "As you wish"
@@ -194,7 +194,8 @@ export default function Jarvis() {
       <div ref={chatRef} style={{ width: "100%", maxWidth: 680, padding: "0 12px", flex: 1, display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", maxHeight: "42vh", marginTop: 8 }}>
         {messages.map((m, i) => (
           <div key={i} style={{
-            padding: "10px 13px", borderRadius: 4, fontSize: "0.78rem", lineHeight: 1.65,
+            padding: "10px 13px", borderRadius: 4, fontSize: "0.78rem", lineHeight: 1.65,whiteSpace: "pre-wrap",
+wordBreak: "break-word",
             borderLeft: `3px solid ${m.role === "jarvis" ? C.core : "#0055aa"}`,
             background: m.role === "jarvis" ? C.panel : "rgba(0,80,140,0.18)",
             textAlign: m.role === "user" ? "right" : "left"
@@ -202,7 +203,9 @@ export default function Jarvis() {
             <span style={{ color: m.role === "jarvis" ? C.core : "#0077cc", fontWeight: 700, fontSize: "0.62rem", letterSpacing: 2 }}>
               {m.role === "jarvis" ? "JARVIS › " : "YOU › "}
             </span>
-            {m.text}
+            <div style={{ whiteSpace: "pre-wrap" }}>
+  {m.text}
+</div>
           </div>
         ))}
         {loading && (
